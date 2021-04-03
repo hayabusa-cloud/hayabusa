@@ -16,10 +16,15 @@ import (
 type Logger interface {
 	// Printf must have the same semantics as log.Printf
 	Printf(format string, args ...interface{})
+	// Infof writes info level log
 	Infof(format string, args ...interface{})
+	// Warnf writes warn level log
 	Warnf(format string, args ...interface{})
+	// Errorf writes error level log
 	Errorf(format string, args ...interface{})
+	// Fatalf writes error level log and panic
 	Fatalf(format string, args ...interface{})
+	// WithField adds a key-value pair value that will be printed out
 	WithField(key string, value interface{}) *logrus.Entry
 }
 
@@ -72,12 +77,6 @@ func newSysLogger(path string, infoAge, warnAge, errorAge time.Duration) (Logger
 }
 
 type gameLog struct {
-	//product    string
-	//version    string
-	//serverID   string
-	//method     string
-	//statusCode string
-	//userID     string
 	action   string
 	fieldMap map[string]interface{}
 	comment  string

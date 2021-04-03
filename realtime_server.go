@@ -7,11 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"github.com/lucas-clemente/quic-go"
-	"github.com/patrickmn/go-cache"
-	"github.com/sirupsen/logrus"
-	"github.com/xtaci/kcp-go"
-	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
 	"net"
@@ -21,6 +16,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/lucas-clemente/quic-go"
+	"github.com/patrickmn/go-cache"
+	"github.com/sirupsen/logrus"
+	"github.com/xtaci/kcp-go"
+	"gopkg.in/yaml.v2"
 )
 
 type realtimeConfig struct {
@@ -77,14 +78,19 @@ func (b *rtMessageBuffer) reset() {
 	b.status, b.length, b.remain = 0, 0, 0
 }
 
-// RTSession is interface rtSession implements
-type RTSession interface {
+// RealtimeSession is interface rtSession implements
+type RealtimeSession interface {
+	// Server returns the reference of realtime server instance
 	Server() (server RealtimeServer)
+	// Close closes the connection with an error
 	Close(code ErrorCode, err string)
+	// AppID returns the application id of session
 	AppID() []byte
+	// UserID returns the user id(hayabusa id) of session
 	UserID() []byte
+	// UserID returns the string type user id(hayabusa id) of session
 	StringUserID() string
-	// Permission() uint8
+	// Token returns the access token that session use
 	Token() []byte
 }
 
@@ -113,7 +119,7 @@ type rtSession struct {
 	loadValue int16
 	loadAt    Time
 	// authentication
-	userBase *RTUserBase
+	userBase *RealtimeUserBase
 
 	// room
 	roomID  *uint16
@@ -408,7 +414,7 @@ type RealtimeServer interface {
 	// RoomUserList returns user list in the room
 	RoomUserList(roomID uint16) (list [][]byte)
 	// RoomStatus returns room status information
-	RoomStatus(roomID uint16) *RTRoomStatus
+	RoomStatus(roomID uint16) *RealtimeRoomStatus
 	// RoomSetMatch sets auto matching parameters
 	// mux is a multiplexer id that avoids data interference
 	// scoreCenter, scoreDiff is for builtin matching algorithm
@@ -443,7 +449,7 @@ func (sm *rtSessionManager) init(rs *hybsRealtimeServer) {
 		sm.pool[i].server = rs
 		sm.pool[i].loadValue = 5
 		sm.pool[i].loadAt = rs.Now()
-		sm.pool[i].userBase = &RTUserBase{}
+		sm.pool[i].userBase = &RealtimeUserBase{}
 		sm.pool[i].msgBuffer = &rtMessageBuffer{}
 		sm.pool[i].active = false
 	}
@@ -477,7 +483,7 @@ func (sm *rtSessionManager) create() (session *rtSession, ok bool) {
 	}
 	session = &sm.pool[sm.currentID]
 	session.active = true
-	session.userBase = &RTUserBase{}
+	session.userBase = &RealtimeUserBase{}
 	session.loadValue = 5
 	session.loadAt = session.server.Now()
 	session.roomID = nil
@@ -509,8 +515,8 @@ type hybsRealtimeServer struct {
 	sessionManager      rtSessionManager
 	handlerTable        rtHandlerTable
 	builtinHandlerTable rtHandlerTable
-	onConnected         func(session RTSession)
-	onDisconnected      func(session RTSession, errorCode ErrorCode)
+	onConnected         func(session RealtimeSession)
+	onDisconnected      func(session RealtimeSession, errorCode ErrorCode)
 	networkByteOrder    binary.ByteOrder
 	isClosing           bool
 	// room management
@@ -644,8 +650,8 @@ func (rs *hybsRealtimeServer) loadControllerConfig() (err error) {
 func (rs *hybsRealtimeServer) initHandlerMap() (err error) {
 	var (
 		handlerTree            = rtHandlerTreeCreateInit()
-		onConnectedHandlers    = make([]func(ss RTSession), 0, 0x10)
-		onDisconnectedHandlers = make([]func(ss RTSession, errorCode ErrorCode), 0, 0x10)
+		onConnectedHandlers    = make([]func(ss RealtimeSession), 0, 0x10)
+		onDisconnectedHandlers = make([]func(ss RealtimeSession, errorCode ErrorCode), 0, 0x10)
 	)
 	// build handler tree from controller config files
 	for _, controller := range rs.realtimeControllerConfig {
@@ -706,16 +712,16 @@ func (rs *hybsRealtimeServer) initHandlerMap() (err error) {
 		}
 	}
 	// insert builtin handlers
-	onConnectedHandlers = append(onConnectedHandlers, func(ss RTSession) {
+	onConnectedHandlers = append(onConnectedHandlers, func(ss RealtimeSession) {
 		rtBuiltinSessionEventRoomBroadcastExit(ss.Server(), ss)
 	})
 	// on connected handler
 	if len(onConnectedHandlers) == 0 {
-		rs.onConnected = func(session RTSession) {}
+		rs.onConnected = func(session RealtimeSession) {}
 	} else if len(onConnectedHandlers) == 1 {
 		rs.onConnected = onConnectedHandlers[0]
 	} else if len(onConnectedHandlers) > 1 {
-		rs.onConnected = func(session RTSession) {
+		rs.onConnected = func(session RealtimeSession) {
 			for i := 0; i < len(onConnectedHandlers); i++ {
 				onConnectedHandlers[i](session)
 			}
@@ -723,11 +729,11 @@ func (rs *hybsRealtimeServer) initHandlerMap() (err error) {
 	}
 	// on disconnected handler
 	if len(onDisconnectedHandlers) == 0 {
-		rs.onDisconnected = func(session RTSession, errorCode ErrorCode) {}
+		rs.onDisconnected = func(session RealtimeSession, errorCode ErrorCode) {}
 	} else if len(onDisconnectedHandlers) == 1 {
 		rs.onDisconnected = onDisconnectedHandlers[0]
 	} else if len(onDisconnectedHandlers) > 1 {
-		rs.onDisconnected = func(session RTSession, errorCode ErrorCode) {
+		rs.onDisconnected = func(session RealtimeSession, errorCode ErrorCode) {
 			for i := 0; i < len(onDisconnectedHandlers); i++ {
 				onDisconnectedHandlers[i](session, errorCode)
 			}
@@ -742,15 +748,15 @@ func (rs *hybsRealtimeServer) initHandlerMap() (err error) {
 	return
 }
 func (rs *hybsRealtimeServer) registerBuiltinHandlers() {
-	rs.builtinHandlerTable[RTRequestCodeUserValue] = rtBuiltinHandlerUserValue
-	rs.builtinHandlerTable[RTRequestCodeUserMessage] = rtBuiltinHandlerUserMessage
+	rs.builtinHandlerTable[RealtimeRequestCodeUserValue] = rtBuiltinHandlerUserValue
+	rs.builtinHandlerTable[RealtimeRequestCodeUserMessage] = rtBuiltinHandlerUserMessage
 
-	rs.builtinHandlerTable[RTRequestCodeRoomCreate] = rtBuiltinHandlerRoomCreate
-	rs.builtinHandlerTable[RTRequestCodeRoomEnter] = rtBuiltinHandlerRoomEnter
-	rs.builtinHandlerTable[RTRequestCodeRoomExit] = rtBuiltinHandlerRoomExit
-	rs.builtinHandlerTable[RTRequestCodeRoomLock] = rtBuiltinHandlerRoomLock
-	rs.builtinHandlerTable[RTRequestCodeRoomUnlock] = rtBuiltinHandlerRoomUnlock
-	rs.builtinHandlerTable[RTRequestCodeRoomAutoMatch] = rtBuiltinHandlerRoomAutoMatch
+	rs.builtinHandlerTable[RealtimeRequestCodeRoomCreate] = rtBuiltinHandlerRoomCreate
+	rs.builtinHandlerTable[RealtimeRequestCodeRoomEnter] = rtBuiltinHandlerRoomEnter
+	rs.builtinHandlerTable[RealtimeRequestCodeRoomExit] = rtBuiltinHandlerRoomExit
+	rs.builtinHandlerTable[RealtimeRequestCodeRoomLock] = rtBuiltinHandlerRoomLock
+	rs.builtinHandlerTable[RealtimeRequestCodeRoomUnlock] = rtBuiltinHandlerRoomUnlock
+	rs.builtinHandlerTable[RealtimeRequestCodeRoomAutoMatch] = rtBuiltinHandlerRoomAutoMatch
 }
 func (rs *hybsRealtimeServer) currentRoomNum() int32 {
 	return atomic.LoadInt32(&rs.roomNum)
@@ -908,7 +914,7 @@ func (rs *hybsRealtimeServer) createRoom() (roomID uint16, ok bool) {
 		rs.checkRoom(searchRoomIdx)
 	}
 	rs.lastCreatedRoom = searchRoomIdx
-	var newRoom = newRTRoom(searchRoomIdx, rs)
+	var newRoom = newRealtimeRoom(searchRoomIdx, rs)
 	rs.roomTable[searchRoomIdx] = newRoom
 	return newRoom.status.ID, true
 }
@@ -1052,7 +1058,7 @@ func (rs *hybsRealtimeServer) RoomUserList(roomID uint16) (list [][]byte) {
 	}
 	return room.UserIDList()
 }
-func (rs *hybsRealtimeServer) RoomStatus(roomID uint16) *RTRoomStatus {
+func (rs *hybsRealtimeServer) RoomStatus(roomID uint16) *RealtimeRoomStatus {
 	var room = rs.roomTable.room(roomID)
 	if room == nil {
 		return nil

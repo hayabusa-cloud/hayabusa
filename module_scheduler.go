@@ -4,17 +4,20 @@ import (
 	"time"
 )
 
+// EventCallback is function type of scheduled task callback
 type EventCallback func(eng *hybsEngine, at Time) (err error)
 
-type SchedulerEvent struct {
+// SchedledEvent is data structured of scheduled event
+type ScheduledEvent struct {
 	id         string
 	callbackFn []EventCallback
 	untilAt    *Time
 	interval   uint16 // second
 }
 
-func newSchedulerEvent(id string, interval uint16, untilAt ...*Time) *SchedulerEvent {
-	ret := &SchedulerEvent{
+// NewScheduledEvent create and returns a new ScheduledEvent with given parameters
+func NewScheduledEvent(id string, interval uint16, untilAt ...*Time) *ScheduledEvent {
+	ret := &ScheduledEvent{
 		id:         id,
 		callbackFn: make([]EventCallback, 0),
 		untilAt:    nil,
@@ -25,15 +28,17 @@ func newSchedulerEvent(id string, interval uint16, untilAt ...*Time) *SchedulerE
 	}
 	return ret
 }
-func (se *SchedulerEvent) AddCallback(fn EventCallback) *SchedulerEvent {
+
+// AddCallback adds EventCallback to the ScheduledEvent
+func (se *ScheduledEvent) AddCallback(fn EventCallback) *ScheduledEvent {
 	if se.callbackFn == nil {
 		se.callbackFn = make([]EventCallback, 0)
 	}
 	se.callbackFn = append(se.callbackFn, fn)
 	return se
 }
-func (se *SchedulerEvent) copy() *SchedulerEvent {
-	return &SchedulerEvent{
+func (se *ScheduledEvent) copy() *ScheduledEvent {
+	return &ScheduledEvent{
 		id:         se.id,
 		callbackFn: se.callbackFn,
 		untilAt:    se.untilAt,
@@ -42,7 +47,7 @@ func (se *SchedulerEvent) copy() *SchedulerEvent {
 }
 
 type eventList struct {
-	*SchedulerEvent
+	*ScheduledEvent
 	next *eventList
 }
 
@@ -55,17 +60,17 @@ type scheduler struct {
 	pulser chan Time
 }
 
-func (s *scheduler) insert(at Time, evt *SchedulerEvent) {
+func (s *scheduler) insert(at Time, evt *ScheduledEvent) {
 	var atUnix16 = uint16(at.Unix() & 0xffff)
 	s.wheel[atUnix16] = &eventList{
-		SchedulerEvent: evt,
+		ScheduledEvent: evt,
 		next:           s.wheel[atUnix16],
 	}
 }
 func (s *scheduler) do(at Time) {
 	var atUnix16 = uint16(at.Unix() & 0xffff)
 	for ; s.wheel[atUnix16] != nil; s.wheel[atUnix16] = s.wheel[atUnix16].next {
-		evt := s.wheel[atUnix16].SchedulerEvent
+		evt := s.wheel[atUnix16].ScheduledEvent
 		if evt.untilAt != nil && at.After(*evt.untilAt) {
 			continue
 		}
@@ -92,7 +97,7 @@ func (s *scheduler) run(ch chan Time) {
 	}
 }
 
-// Pulser returns a pulse generator
+// Pulser returns a new channel type timing pulse generator with given duration and bufferSize
 func Pulser(d time.Duration, bufferSize ...uint16) (ch chan Time) {
 	var nextPulseAt = Now().Truncate(d)
 	if len(bufferSize) < 1 {
@@ -123,8 +128,9 @@ func Pulser(d time.Duration, bufferSize ...uint16) (ch chan Time) {
 	return ch
 }
 
-var defaultSchedulerEvents = make([]*SchedulerEvent, 0)
+var defaultSchedulerEvents = make([]*ScheduledEvent, 0)
 
-func RegisterSchedulerEvent(evt *SchedulerEvent) {
+// RegisterScheduledEvent register evt to engine
+func RegisterScheduledEvent(evt *ScheduledEvent) {
 	defaultSchedulerEvents = append(defaultSchedulerEvents, evt)
 }
