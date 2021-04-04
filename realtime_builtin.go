@@ -5,68 +5,71 @@ import (
 	"math"
 )
 
-// realtime built-in middlewares and handlers
+type RealtimeErrorCode = uint16
+type RealtimeRequestCode = uint16
+type RealtimeEventCode = uint16
+
 const (
 	// client side error code
-	RTErrorCodeBadRequest          uint16 = 0x0000 // bad request etc.
-	RTErrorCodeUnauthorized        uint16 = 0x0001 // unauthenticated
-	RTErrorCodeForbidden           uint16 = 0x0003 // short permission
-	RTErrorCodeNotFound            uint16 = 0x0004 // undefined request code
-	RTErrorCodeRoomCreateFailed    uint16 = 0x0100 // create room failed
-	RTErrorCodeRoomEnterFailed     uint16 = 0x0101 // enter room failed
-	RTErrorCodeRoomExitFailed      uint16 = 0x0102 // exit room failed
-	RTErrorCodeRoomLockFailed      uint16 = 0x0103 // lock room failed
-	RTErrorCodeRoomUnlockFailed    uint16 = 0x0104 // unlock room failed
-	RTErrorCodeRoomAutoMatchFailed uint16 = 0x0110 // auto match failed
+	RealtimeErrorCodeBadRequest          RealtimeErrorCode = 0x0000 // bad request etc.
+	RealtimeErrorCodeUnauthorized        RealtimeErrorCode = 0x0001 // unauthenticated
+	RealtimeErrorCodeForbidden           RealtimeErrorCode = 0x0003 // short permission
+	RealtimeErrorCodeNotFound            RealtimeErrorCode = 0x0004 // undefined request code
+	RealtimeErrorCodeRoomCreateFailed    RealtimeErrorCode = 0x0100 // create room failed
+	RealtimeErrorCodeRoomEnterFailed     RealtimeErrorCode = 0x0101 // enter room failed
+	RealtimeErrorCodeRoomExitFailed      RealtimeErrorCode = 0x0102 // exit room failed
+	RealtimeErrorCodeRoomLockFailed      RealtimeErrorCode = 0x0103 // lock room failed
+	RealtimeErrorCodeRoomUnlockFailed    RealtimeErrorCode = 0x0104 // unlock room failed
+	RealtimeErrorCodeRoomAutoMatchFailed RealtimeErrorCode = 0x0110 // auto match failed
 	// server side error code
-	RTErrorCodeInternal uint16 = 0xffff // server internal error
+	RealtimeErrorCodeInternal RealtimeErrorCode = 0xffff // server internal error
 
 	// request code
-	RTRequestCodeUserValue   uint16 = 0x00fe // request code of broadcast user original value
-	RTRequestCodeUserMessage uint16 = 0x00ff // request code of send user original message
+	RealtimeRequestCodeUserValue   RealtimeRequestCode = 0x00fe // request code of broadcast user original value
+	RealtimeRequestCodeUserMessage RealtimeRequestCode = 0x00ff // request code of send user original message
 
-	RTRequestCodeRoomCreate    uint16 = 0x0100
-	RTRequestCodeRoomEnter     uint16 = 0x0101
-	RTRequestCodeRoomExit      uint16 = 0x0102
-	RTRequestCodeRoomLock      uint16 = 0x0103
-	RTRequestCodeRoomUnlock    uint16 = 0x0104
-	RTRequestCodeRoomAutoMatch uint16 = 0x0110
-	RTRequestCodeRoomBroadcast uint16 = 0x01ff
+	RealtimeRequestCodeRoomCreate    RealtimeRequestCode = 0x0100
+	RealtimeRequestCodeRoomEnter     RealtimeRequestCode = 0x0101
+	RealtimeRequestCodeRoomExit      RealtimeRequestCode = 0x0102
+	RealtimeRequestCodeRoomLock      RealtimeRequestCode = 0x0103
+	RealtimeRequestCodeRoomUnlock    RealtimeRequestCode = 0x0104
+	RealtimeRequestCodeRoomAutoMatch RealtimeRequestCode = 0x0110
+	RealtimeRequestCodeRoomBroadcast RealtimeRequestCode = 0x01ff
 
 	// event code
-	RTEventCodeUserUpdated       uint16 = 0x8000
-	RTEventCodeUserEnteredRoom   uint16 = 0x8002
-	RTEventCodeUserExitedRoom    uint16 = 0x8003
-	RTEventCodeUserEnteredServer uint16 = 0x8006
-	RTEventCodeUserExitedServer  uint16 = 0x8007
-	RTEventCodeUserEnteredAOIMap uint16 = 0x8010
-	RTEventCodeUserExitedAOIMap  uint16 = 0x8011
-	RTEventCodeUserMovedOnAOIMap uint16 = 0x8012
-	RTEventCodeUserValue         uint16 = 0x80fe
-	RTEventCodeUserMessage       uint16 = 0x80ff
+	RealtimeEventCodeUserUpdated       RealtimeEventCode = 0x8000
+	RealtimeEventCodeUserEnteredRoom   RealtimeEventCode = 0x8002
+	RealtimeEventCodeUserExitedRoom    RealtimeEventCode = 0x8003
+	RealtimeEventCodeUserEnteredServer RealtimeEventCode = 0x8006
+	RealtimeEventCodeUserExitedServer  RealtimeEventCode = 0x8007
+	RealtimeEventCodeUserEnteredAOIMap RealtimeEventCode = 0x8010
+	RealtimeEventCodeUserExitedAOIMap  RealtimeEventCode = 0x8011
+	RealtimeEventCodeUserMovedOnAOIMap RealtimeEventCode = 0x8012
+	RealtimeEventCodeUserValue         RealtimeEventCode = 0x80fe
+	RealtimeEventCodeUserMessage       RealtimeEventCode = 0x80ff
 
-	RTEventCodeRoomCreated   uint16 = 0x8100
-	RTEventCodeRoomUpdated   uint16 = 0x8101
-	RTEventCodeRoomRemoved   uint16 = 0x8102
-	RTEventCodeRoomLocked    uint16 = 0x8103
-	RTEventCodeRoomUnlocked  uint16 = 0x8104
-	RTEventCodeRoomUserList  uint16 = 0x8105
-	RTEventCodeRoomBroadcast uint16 = 0x81ff
+	RealtimeEventCodeRoomCreated   RealtimeEventCode = 0x8100
+	RealtimeEventCodeRoomUpdated   RealtimeEventCode = 0x8101
+	RealtimeEventCodeRoomRemoved   RealtimeEventCode = 0x8102
+	RealtimeEventCodeRoomLocked    RealtimeEventCode = 0x8103
+	RealtimeEventCodeRoomUnlocked  RealtimeEventCode = 0x8104
+	RealtimeEventCodeRoomUserList  RealtimeEventCode = 0x8105
+	RealtimeEventCodeRoomBroadcast RealtimeEventCode = 0x81ff
 
-	RTEventCodeErrorServer uint16 = 0x8ffe
-	RTEventCodeErrorClient uint16 = 0x8fff
+	RealtimeEventCodeErrorServer RealtimeEventCode = 0x8ffe
+	RealtimeEventCodeErrorClient RealtimeEventCode = 0x8fff
 )
 
 var (
-	rtBuiltinHandlerMap = make(map[string]RTHandler)
+	rtBuiltinHandlerMap = make(map[string]RealtimeHandler)
 )
 
 var (
-	rtBuiltinHandlerNop RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerNop RealtimeHandler = func(ctx RealtimeCtx) {
 		fmt.Println("nop")
 	}
 
-	rtBuiltinHandlerUserValue RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerUserValue RealtimeHandler = func(ctx RealtimeCtx) {
 		// check room
 		if !ctx.IsInRoom() {
 			return
@@ -84,7 +87,7 @@ var (
 		}
 		room.valueTable.Set(key, originBytes)
 		ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-		ctx.SetEventCode(RTEventCodeUserValue)
+		ctx.SetEventCode(RealtimeEventCodeUserValue)
 		ctx.WriteUint8(key)
 		if originBytes != nil {
 			ctx.WriteBytesNoLen(originBytes)
@@ -92,14 +95,14 @@ var (
 		ctx.BroadcastRoom()
 	}
 
-	rtBuiltinHandlerUserMessage RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerUserMessage RealtimeHandler = func(ctx RealtimeCtx) {
 		// receive message
 		var rawCtx = ctx.(*rtCtx)
 		var destType, destId, command = uint8(0), uint16(0), uint16(0)
 		rawCtx.ReadUint8(&destType).ReadUint16(&destId).ReadUint16(&command)
 		var originMsg = rawCtx.in.payload[rawCtx.in.offset:rawCtx.in.length]
 		// make packet
-		ctx.SetEventCode(RTEventCodeUserMessage)
+		ctx.SetEventCode(RealtimeEventCodeUserMessage)
 		ctx.WriteUint16(ctx.SessionID())
 		ctx.WriteUint8(destType)
 		ctx.WriteUint16(destId)
@@ -125,69 +128,69 @@ var (
 		}
 	}
 
-	rtBuiltinHandlerRoomCreate RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomCreate RealtimeHandler = func(ctx RealtimeCtx) {
 		var roomID, ok = ctx.Server().CreateRoom()
 		ctx.ValueTable().Set(0, roomID).Set(1, ok)
 	}
-	rtBuiltinHandlerRoomRemove RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomRemove RealtimeHandler = func(ctx RealtimeCtx) {
 		var roomID = ctx.ValueTable().GetUint16(0)
 		ctx.Server().DestroyRoom(roomID)
 	}
 
-	rtBuiltinHandlerRoomEnter RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomEnter RealtimeHandler = func(ctx RealtimeCtx) {
 		var roomID = uint16(0)
 		ctx.ReadUint16(&roomID)
 		var ok = ctx.Server().RoomEnterUser(roomID, ctx.SessionID())
 		ctx.ValueTable().Set(0, roomID).Set(1, ok)
 	}
 
-	rtBuiltinHandlerRoomExit RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomExit RealtimeHandler = func(ctx RealtimeCtx) {
 		var roomID = ctx.CurrentRoomID()
 		var ok = ctx.Server().RoomExitUser(roomID, ctx.SessionID())
 		ctx.ValueTable().Set(0, roomID).Set(1, ok)
 	}
 
-	rtBuiltinHandlerRoomLock RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomLock RealtimeHandler = func(ctx RealtimeCtx) {
 		var server = ctx.(*rtCtx).server
 		if !ctx.IsInRoom() {
-			ctx.ErrorClientRequest(RTErrorCodeRoomLockFailed, "not in room")
+			ctx.ErrorClientRequest(RealtimeErrorCodeRoomLockFailed, "not in room")
 			return
 		}
 		var ok = server.RoomLock(ctx.CurrentRoomID())
 		if !ok {
-			ctx.ErrorClientRequest(RTErrorCodeRoomLockFailed, "lock room failed")
+			ctx.ErrorClientRequest(RealtimeErrorCodeRoomLockFailed, "lock room failed")
 			return
 		}
 		ctx.ValueTable().Set(0, ok)
 		// room broadcast
 		ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-		ctx.SetEventCode(RTEventCodeRoomLocked)
+		ctx.SetEventCode(RealtimeEventCodeRoomLocked)
 		ctx.WriteUint16(ctx.CurrentRoomID())
 		ctx.BroadcastRoom()
 		ctx.Reset()
 	}
 
-	rtBuiltinHandlerRoomUnlock RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomUnlock RealtimeHandler = func(ctx RealtimeCtx) {
 		var server = ctx.(*rtCtx).server
 		if !ctx.IsInRoom() {
-			ctx.ErrorClientRequest(RTErrorCodeRoomUnlockFailed, "not in room")
+			ctx.ErrorClientRequest(RealtimeErrorCodeRoomUnlockFailed, "not in room")
 			return
 		}
 		var ok = server.RoomUnlock(ctx.CurrentRoomID())
 		if !ok {
-			ctx.ErrorClientRequest(RTErrorCodeRoomUnlockFailed, "lock room failed")
+			ctx.ErrorClientRequest(RealtimeErrorCodeRoomUnlockFailed, "lock room failed")
 			return
 		}
 		ctx.ValueTable().Set(0, ok)
 		// room broadcast
 		ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-		ctx.SetEventCode(RTEventCodeRoomUnlocked)
+		ctx.SetEventCode(RealtimeEventCodeRoomUnlocked)
 		ctx.WriteUint16(ctx.CurrentRoomID())
 		ctx.BroadcastRoom()
 		ctx.Reset()
 	}
 
-	rtBuiltinHandlerRoomAutoMatch RTHandler = func(ctx RTCtx) {
+	rtBuiltinHandlerRoomAutoMatch RealtimeHandler = func(ctx RealtimeCtx) {
 		var roomMux = ctx.ReadBytes()
 		var scoreCenter, scoreDiff float32 = 0, math.MaxFloat32
 		var userMin, userMax uint16 = 0, 0
@@ -197,7 +200,7 @@ var (
 		ctx.ValueTable().Set(3, userMin).Set(4, userMax)
 		// check parameters
 		if userMin > userMax {
-			ctx.(*rtCtx).ErrorClientRequest(RTErrorCodeRoomAutoMatchFailed, "bad room user num:%d>%d", userMax, userMin)
+			ctx.(*rtCtx).ErrorClientRequest(RealtimeErrorCodeRoomAutoMatchFailed, "bad room user num:%d>%d", userMax, userMin)
 		}
 		// random select matched room
 		var room = ctx.(*rtCtx).server.roomTable.randomSelect(ctx.AppID(), roomMux, scoreCenter)
@@ -215,7 +218,7 @@ var (
 			ctx.Server().RoomEnterUser(newRoomID, ctx.SessionID())
 			// broadcast new room created
 			ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-			ctx.SetEventCode(RTEventCodeRoomCreated)
+			ctx.SetEventCode(RealtimeEventCodeRoomCreated)
 			ctx.WriteRoom(newRoomID)
 			ctx.BroadcastServer()
 			ctx.Reset()
@@ -226,7 +229,7 @@ var (
 			ctx.Server().RoomEnterUser(room.id, ctx.SessionID())
 			// broadcast update room information
 			ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-			ctx.SetEventCode(RTEventCodeRoomUpdated)
+			ctx.SetEventCode(RealtimeEventCodeRoomUpdated)
 			ctx.WriteRoom(room.id)
 			ctx.BroadcastServer()
 			ctx.Reset()
@@ -235,7 +238,7 @@ var (
 		}
 		// broadcast user entered room
 		ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-		ctx.SetEventCode(RTEventCodeUserEnteredRoom)
+		ctx.SetEventCode(RealtimeEventCodeUserEnteredRoom)
 		ctx.WriteUserStatus(ctx.SessionID())
 		ctx.BroadcastRoom()
 		return
@@ -243,7 +246,7 @@ var (
 )
 
 var (
-	rtBuiltinMiddlewareMap = make(map[string]RTMiddleware)
+	rtBuiltinMiddlewareMap = make(map[string]RealtimeMiddleware)
 )
 
 var (
@@ -251,43 +254,43 @@ var (
 	rtBuiltinMiddleware1 = rtMiddlewareIE
 )
 
-func rtBuiltinMiddlewareDefaultRedis(id string) RTMiddleware {
-	return func(h RTHandler) RTHandler {
-		return func(ctx RTCtx) {
+func rtBuiltinMiddlewareDefaultRedis(id string) RealtimeMiddleware {
+	return func(h RealtimeHandler) RealtimeHandler {
+		return func(ctx RealtimeCtx) {
 			ctx.(*rtCtx).defaultRedis = id
 			h(ctx)
 		}
 	}
 }
-func rtBuiltinMiddlewareDefaultCache(id string) RTMiddleware {
-	return func(h RTHandler) RTHandler {
-		return func(ctx RTCtx) {
+func rtBuiltinMiddlewareDefaultCache(id string) RealtimeMiddleware {
+	return func(h RealtimeHandler) RealtimeHandler {
+		return func(ctx RealtimeCtx) {
 			ctx.(*rtCtx).defaultCache = id
 			h(ctx)
 		}
 	}
 }
-func rtBuiltinMiddlewareDefaultCsvMux(mux string) RTMiddleware {
-	return func(h RTHandler) RTHandler {
-		return func(ctx RTCtx) {
+func rtBuiltinMiddlewareDefaultCsvMux(mux string) RealtimeMiddleware {
+	return func(h RealtimeHandler) RealtimeHandler {
+		return func(ctx RealtimeCtx) {
 			ctx.(*rtCtx).defaultCsvMux = mux
 			h(ctx)
 		}
 	}
 }
-func rtBuiltinMiddlewareWithCtxValue(k int, v interface{}) RTMiddleware {
+func rtBuiltinMiddlewareWithCtxValue(k int, v interface{}) RealtimeMiddleware {
 	if k < 0 || k >= rtCtxValueTableSize {
 		return rtBuiltinMiddleware1
 	}
-	return func(h RTHandler) RTHandler {
-		return func(ctx RTCtx) {
+	return func(h RealtimeHandler) RealtimeHandler {
+		return func(ctx RealtimeCtx) {
 			ctx.(*rtCtx).value.Set(k, v)
 			h(ctx)
 		}
 	}
 }
 
-func RunRTHandler(ctx RTCtx, builtinHandler string) {
+func RunRealtimeHandler(ctx RealtimeCtx, builtinHandler string) {
 	var h, ok = rtBuiltinHandlerMap[builtinHandler]
 	if !ok {
 		ctx.ErrorServerInternal("handler %s not found", builtinHandler)
@@ -297,14 +300,14 @@ func RunRTHandler(ctx RTCtx, builtinHandler string) {
 }
 
 var (
-	rtBuiltinSessionEventRoomBroadcastExit = func(server RealtimeServer, session RTSession) {
+	rtBuiltinSessionEventRoomBroadcastExit = func(server RealtimeServer, session RealtimeSession) {
 		var rawSession, rawServer = session.(*rtSession), server.(*hybsRealtimeServer)
 		if rawSession.roomID != nil {
 			var pkt = rawServer.outPacketPool.Get().(OutPacket)
 			defer rawServer.outPacketPool.Put(pkt)
 			pkt.Reset()
 			pkt.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-			pkt.SetEventCode(RTEventCodeUserExitedRoom)
+			pkt.SetEventCode(RealtimeEventCodeUserExitedRoom)
 			pkt.WriteUint16(rawSession.id)
 			pkt.WriteUint16(*rawSession.roomID)
 			server.BroadcastPacketRoom(*rawSession.roomID, pkt)

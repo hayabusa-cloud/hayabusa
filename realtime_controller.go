@@ -5,18 +5,18 @@ const (
 	rtHandlerTableSize    = 1 << rtHandlerTableSizeBit
 )
 
-type rtHandlerTable [rtHandlerTableSize]RTHandler
+type rtHandlerTable [rtHandlerTableSize]RealtimeHandler
 type rtEventModuleTable [rtHandlerTableSize]uint8
 
-// RTHandler is function type for processing socket requests
-type RTHandler func(ctx RTCtx)
+// RealtimeHandler is function type for processing socket requests
+type RealtimeHandler func(ctx RealtimeCtx)
 
-// Combine returns a new RTHandler that processes multiple businesses in sequence
-func (h RTHandler) Combine(next ...RTHandler) RTHandler {
+// Combine returns a new RealtimeHandler that processes multiple businesses in sequence
+func (h RealtimeHandler) Combine(next ...RealtimeHandler) RealtimeHandler {
 	if len(next) < 1 {
 		return h
 	}
-	return func(ctx RTCtx) {
+	return func(ctx RealtimeCtx) {
 		h(ctx)
 		for _, n := range next {
 			if n == nil {
@@ -27,32 +27,32 @@ func (h RTHandler) Combine(next ...RTHandler) RTHandler {
 	}
 }
 
-// RTMiddleware is function type which receives a RTHandler and
-// returns a new RTHandler type closure included middleware logic
-type RTMiddleware func(h RTHandler) RTHandler
+// RealtimeMiddleware is function type which receives a RealtimeHandler and
+// returns a new RealtimeHandler type closure included middleware logic
+type RealtimeMiddleware func(h RealtimeHandler) RealtimeHandler
 
-// Apply returns a new RTHandler included middleware logic
-func (m RTMiddleware) Apply(h RTHandler) RTHandler {
+// Apply returns a new RealtimeHandler included middleware logic
+func (m RealtimeMiddleware) Apply(h RealtimeHandler) RealtimeHandler {
 	return m(h)
 }
 
-// Left returns a new RTMiddleware first including process logic in m, and then includes inner
-func (m RTMiddleware) Left(inner RTMiddleware) RTMiddleware {
-	return func(h RTHandler) RTHandler {
+// Left returns a new RealtimeMiddleware first including process logic in m, and then includes inner
+func (m RealtimeMiddleware) Left(inner RealtimeMiddleware) RealtimeMiddleware {
+	return func(h RealtimeHandler) RealtimeHandler {
 		return m.Apply(inner.Apply(h))
 	}
 }
 
-// Right returns a new RTMiddleware first including process logic in outer, and then includes m
-func (m RTMiddleware) Right(outer RTMiddleware) RTMiddleware {
-	return func(h RTHandler) RTHandler {
+// Right returns a new RealtimeMiddleware first including process logic in outer, and then includes m
+func (m RealtimeMiddleware) Right(outer RealtimeMiddleware) RealtimeMiddleware {
+	return func(h RealtimeHandler) RealtimeHandler {
 		return outer.Apply(m.Apply(h))
 	}
 }
 
 var (
-	rtMiddlewareZero RTMiddleware = func(h RTHandler) RTHandler { return func(ctx RTCtx) {} }
-	rtMiddlewareIE   RTMiddleware = func(h RTHandler) RTHandler { return h }
+	rtMiddlewareZero RealtimeMiddleware = func(h RealtimeHandler) RealtimeHandler { return func(ctx RealtimeCtx) {} }
+	rtMiddlewareIE   RealtimeMiddleware = func(h RealtimeHandler) RealtimeHandler { return h }
 )
 
 // <event code, mask code>
@@ -61,24 +61,24 @@ const (
 	rtMiddlewareTableSize    = 1 << rtMiddlewareTableSizeBit
 )
 
-type rtMiddlewareTable [rtMiddlewareTableSize][rtMiddlewareTableSizeBit + 1][]RTMiddleware
+type rtMiddlewareTable [rtMiddlewareTableSize][rtMiddlewareTableSizeBit + 1][]RealtimeMiddleware
 
-func (mgr *rtMiddlewareTable) Use(code uint16, mask uint8, m RTMiddleware) {
+func (mgr *rtMiddlewareTable) Use(code uint16, mask uint8, m RealtimeMiddleware) {
 	seg := (code >> (0x10 - mask)) << (0x10 - mask)
 	if mgr[seg][mask] == nil {
-		mgr[seg][mask] = make([]RTMiddleware, 0)
+		mgr[seg][mask] = make([]RealtimeMiddleware, 0)
 	}
 	mgr[seg][mask] = append(mgr[seg][mask], m)
 }
 
 type rtMiddlewareDefineInfo struct {
 	id string
-	m  RTMiddleware
+	m  RealtimeMiddleware
 }
 
 var defaultMiddlewareDefines = make([]rtMiddlewareDefineInfo, 0, 0x100)
 
-func RegisterRTMiddleware(id string, m RTMiddleware) {
+func RegisterRealtimeMiddleware(id string, m RealtimeMiddleware) {
 	if m == nil {
 		return
 	}
@@ -90,7 +90,7 @@ func RegisterRTMiddleware(id string, m RTMiddleware) {
 
 type rtHandlerDefineInfo struct {
 	id string
-	h  RTHandler
+	h  RealtimeHandler
 }
 type rtHandlerDefineList []rtHandlerDefineInfo
 
@@ -98,8 +98,8 @@ var (
 	rtProcessorHandlers = make(map[uint8]rtHandlerDefineList)
 )
 
-// RegisterRTHandler register a RTHandler by specified id
-func RegisterRTHandler(id string, h RTHandler) {
+// RegisterRealtimeHandler register a RealtimeHandler by specified id
+func RegisterRealtimeHandler(id string, h RealtimeHandler) {
 	if h == nil {
 		return
 	}
@@ -117,8 +117,8 @@ func RegisterRTHandler(id string, h RTHandler) {
 
 type rtHandlerTree struct {
 	children    [2]*rtHandlerTree
-	middlewares []RTMiddleware
-	handlers    []RTHandler
+	middlewares []RealtimeMiddleware
+	handlers    []RealtimeHandler
 	depth       uint8
 	redis       string
 	cache       string
@@ -128,8 +128,8 @@ type rtHandlerTree struct {
 func rtHandlerTreeCreateInit() *rtHandlerTree {
 	return &rtHandlerTree{
 		children:    [2]*rtHandlerTree{nil, nil},
-		middlewares: make([]RTMiddleware, 0, 0x10),
-		handlers:    make([]RTHandler, 0, 0x10),
+		middlewares: make([]RealtimeMiddleware, 0, 0x10),
+		handlers:    make([]RealtimeHandler, 0, 0x10),
 		depth:       0,
 		redis:       "",
 		cache:       "",
@@ -154,10 +154,10 @@ func (tree *rtHandlerTree) peekOrCreate(code uint16, bits uint8) (node *rtHandle
 	}
 	return
 }
-func (tree *rtHandlerTree) insertHandler(h RTHandler) {
+func (tree *rtHandlerTree) insertHandler(h RealtimeHandler) {
 	tree.handlers = append(tree.handlers, h)
 }
-func (tree *rtHandlerTree) insertMiddleware(m RTMiddleware) {
+func (tree *rtHandlerTree) insertMiddleware(m RealtimeMiddleware) {
 	tree.middlewares = append(tree.middlewares, m)
 }
 func (tree *rtHandlerTree) setDefaultRedis(id string) {
@@ -169,8 +169,8 @@ func (tree *rtHandlerTree) setDefaultCache(id string) {
 func (tree *rtHandlerTree) setDefaultCsvMux(mux string) {
 	tree.csvMux = mux
 }
-func (tree *rtHandlerTree) search(code uint16) RTHandler {
-	var handlers = make([]RTHandler, 0)
+func (tree *rtHandlerTree) search(code uint16) RealtimeHandler {
+	var handlers = make([]RealtimeHandler, 0)
 	var node = tree
 	var middleware = rtMiddlewareIE
 	var redis, cache, csvMux = "", "", ""
@@ -205,7 +205,7 @@ func (tree *rtHandlerTree) search(code uint16) RTHandler {
 		middleware = middleware.Left(rtBuiltinMiddlewareDefaultCsvMux(csvMux))
 	}
 	if len(handlers) == 0 {
-		return func(ctx RTCtx) {}
+		return func(ctx RealtimeCtx) {}
 	} else if len(handlers) == 1 {
 		return handlers[0]
 	} else {
@@ -215,11 +215,11 @@ func (tree *rtHandlerTree) search(code uint16) RTHandler {
 
 type rtOnConnectedDefine struct {
 	id string
-	h  func(ss RTSession)
+	h  func(ss RealtimeSession)
 }
 type rtOnDisconnectedDefine struct {
 	id string
-	h  func(ss RTSession, errorCode ErrorCode)
+	h  func(ss RealtimeSession, errorCode ErrorCode)
 }
 
 var (
@@ -227,13 +227,13 @@ var (
 	defaultOnDisconnectedHandlers = make([]rtOnDisconnectedDefine, 0, 0x10)
 )
 
-func RegisterRTOnConnected(id string, h func(ss RTSession)) {
+func RegisterRealtimeOnConnected(id string, h func(ss RealtimeSession)) {
 	defaultOnConnectedHandlers = append(defaultOnConnectedHandlers, rtOnConnectedDefine{
 		id: id,
 		h:  h,
 	})
 }
-func RegisterRTOnDisconnected(id string, h func(ss RTSession, errorCode ErrorCode)) {
+func RegisterRealtimeOnDisconnected(id string, h func(ss RealtimeSession, errorCode ErrorCode)) {
 	defaultOnDisconnectedHandlers = append(defaultOnDisconnectedHandlers, rtOnDisconnectedDefine{
 		id: id,
 		h:  h,
@@ -270,10 +270,10 @@ const (
 )
 
 const (
-	rTHeader0SSProxy    = rtHeaderPV0 | rtHeaderPDSS | rtHeaderCmdProxy
-	rTHeader0SSForward  = rtHeaderPV0 | rtHeaderPDSS | rtHeaderCmdForward
-	rTHeader0SCBuiltin  = rtHeaderPV0 | rtHeaderPDSC | rtHeaderCmdBuiltin
-	RTHeader0SCOriginal = rtHeaderPV0 | rtHeaderPDSC | rtHeaderCmdOriginal
+	rTHeader0SSProxy          = rtHeaderPV0 | rtHeaderPDSS | rtHeaderCmdProxy
+	rTHeader0SSForward        = rtHeaderPV0 | rtHeaderPDSS | rtHeaderCmdForward
+	rTHeader0SCBuiltin        = rtHeaderPV0 | rtHeaderPDSC | rtHeaderCmdBuiltin
+	RealtimeHeader0SCOriginal = rtHeaderPV0 | rtHeaderPDSC | rtHeaderCmdOriginal
 )
 
 const (

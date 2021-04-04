@@ -12,10 +12,12 @@ import (
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
+// Time is datatype that wrapping time.Time and some useful methods
 type Time time.Time
 
 var minDateTime, maxDateTime = TimeNil(), Time(time.Unix(1<<48, 0))
 
+// Raw returns value with time.Time type
 func (t Time) Raw() time.Time {
 	return time.Time(t)
 }
@@ -40,26 +42,30 @@ func (t Time) Sub(u Time) time.Duration {
 func (t Time) Unix() int64 {
 	return t.Raw().Unix()
 }
+
+// SecondAt returns the result of rounding t down to the nearest multiple of a second
 func (t Time) SecondAt() Time {
-	hourString := t.Raw().Local().Format("2006-01-02 15:04:05")
-	newTime, _ := TimeParse("2006-01-02 15:04:05", hourString)
-	return Time(newTime.Raw().Local())
+	return Time(t.Raw().Local().Truncate(time.Second))
 }
+
+// MinuteAt returns the result of rounding t down to the nearest multiple of a minute
 func (t Time) MinuteAt() Time {
-	hourString := t.Raw().Local().Format("2006-01-02 15:04:00")
-	newTime, _ := TimeParse("2006-01-02 15:04:05", hourString)
-	return Time(newTime.Raw().Local())
+	return Time(t.Raw().Local().Truncate(time.Minute))
 }
+
+// HourAt returns the result of rounding t down to the nearest multiple of a hour
 func (t Time) HourAt() Time {
-	hourString := t.Raw().Local().Format("2006-01-02 15:00:00")
-	newTime, _ := TimeParse("2006-01-02 15:04:05", hourString)
-	return Time(newTime.Raw().Local())
+	return Time(t.Raw().Local().Truncate(time.Hour))
 }
+
+// HourAt returns the result of rounding t down to the nearest multiple of a day
 func (t Time) DayAt(offset time.Duration) Time {
 	dayString := t.Raw().Local().Add(-offset).Format("2006-01-02")
 	newTime, _ := TimeParse("2006-01-02", dayString)
 	return Time(newTime.Add(offset).Raw().Local())
 }
+
+// HourAt returns the result of rounding t down to the nearest multiple of a month
 func (t Time) MonthAt(offset time.Duration) Time {
 	monthString := t.Raw().Local().Add(-offset).Format("2006-01") + "-01"
 	newTime, _ := TimeParse("2006-01-02", monthString)

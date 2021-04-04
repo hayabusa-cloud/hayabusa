@@ -238,18 +238,31 @@ func (batch *hybsBatch) start() {
 
 // BatchCtx is interface hybsBatchCtx implements
 type BatchCtx interface {
+	// Context returns the context of batch instance
 	Context() context.Context
+	// UserValue returns the value stored via SetUserValue under the given key.
 	UserValue(key string) (val interface{}, ok bool)
+	// SetUserValue stores the given value under the given key in BatchCtx.
 	SetUserValue(key string, value interface{})
+	// Cache returns the cache instance under the given id
 	Cache(id string) *cache.Cache
+	// Redis returns the RedisClient instance under the given id
 	Redis(id string) RedisClient
+	// Mongo returns the mongodb client under the given id
 	Mongo(id string) *mongo.Database
+	// MySQL returns the mysql client under the given id
 	MySQL(id string) *gorm.DB
+	// Sqlite returns the sqlite instance under the given id
 	Sqlite(id string) *gorm.DB
+	// LogInfof writes info level log
 	LogInfof(format string, args ...interface{})
+	// LogWarnf writes warning level log
 	LogWarnf(format string, args ...interface{})
+	// LogErrorf writes error level log
 	LogErrorf(format string, args ...interface{})
+	// StartedAt returns the batch started executing time
 	StartedAt() Time
+	// Now returns the logical current time
 	Now() Time
 }
 

@@ -28,7 +28,7 @@ func newRTModule() rtModule {
 
 func (p rtModule) start(rs *hybsRealtimeServer) {
 	for ctx := range p {
-		var cmd, code, h = ctx.in.header & 0xf, ctx.in.code, RTHandler(nil)
+		var cmd, code, h = ctx.in.header & 0xf, ctx.in.code, RealtimeHandler(nil)
 		if cmd == rtHeaderCmdBuiltin {
 			h = rs.builtinHandlerTable[code]
 		} else if cmd == rtHeaderCmdOriginal {
@@ -114,7 +114,7 @@ func (t rtRoomTable) randomSelect(appID []byte, mux []byte, scoreCenter float32)
 	return roomList[0].room
 }
 
-type RTRoomStatus struct {
+type RealtimeRoomStatus struct {
 	ID          uint16
 	RoomType    uint8
 	Status      uint8
@@ -127,12 +127,12 @@ type RTRoomStatus struct {
 	MatchMux    []byte
 }
 
-func (r *RTRoomStatus) writeToPacket(pkt *rtPacket) {
+func (r *RealtimeRoomStatus) writeToPacket(pkt *rtPacket) {
 	pkt.WriteUint16(r.ID).WriteUint8(r.RoomType).WriteUint8(r.Status)
 	pkt.WriteUint16(r.MinUser).WriteUint16(r.MaxUser)
 	pkt.WriteFloat32(r.ScoreCenter).WriteFloat32(r.ScoreDiff)
 }
-func (r *RTRoomStatus) isMatchMux(mux []byte) bool {
+func (r *RealtimeRoomStatus) isMatchMux(mux []byte) bool {
 	if mux == nil || r.MatchMux == nil {
 		return false
 	}
@@ -143,7 +143,7 @@ type rtRoom struct {
 	id         uint16
 	mu         sync.RWMutex
 	owner      *rtRoomUser
-	status     *RTRoomStatus
+	status     *RealtimeRoomStatus
 	userTable  []*rtRoomUser
 	valueTable rtRoomValueTable
 	server     *hybsRealtimeServer
@@ -154,7 +154,7 @@ type rtRoom struct {
 }
 
 func rtRoomInitCreate() *rtRoom {
-	var roomStatus = &RTRoomStatus{
+	var roomStatus = &RealtimeRoomStatus{
 		RoomType:    rtRoomTypeMatching,
 		Status:      rtRoomStatusOpening,
 		CreatedAt:   Now(),
@@ -204,7 +204,7 @@ const (
 	rtRoomUserNumMax uint16 = 1 << 12
 )
 
-func newRTRoom(roomID uint16, server *hybsRealtimeServer) *rtRoom {
+func newRealtimeRoom(roomID uint16, server *hybsRealtimeServer) *rtRoom {
 	var defaultRoomLife = time.Hour * 36
 	var newRoom = server.roomPool.Get().(*rtRoom)
 	newRoom.id = roomID

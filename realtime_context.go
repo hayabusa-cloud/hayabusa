@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"math"
+
 	"github.com/labstack/gommon/random"
 	"github.com/patrickmn/go-cache"
 	"github.com/sirupsen/logrus"
-	"math"
 )
 
-// RTCtx is interface rtCtx implements
-type RTCtx interface {
+// RealtimeCtx is interface rtCtx implements
+type RealtimeCtx interface {
 	// InPacket is received packet
 	InPacket
 	// OutPacket is sending packet
@@ -41,7 +42,7 @@ type RTCtx interface {
 	// MasterTable find and returns master table by table name
 	MasterTable(tableName string, args ...string) MasterTable
 	// GetSession find and returns session by session id
-	GetSession(sessionID uint16) RTSession
+	GetSession(sessionID uint16) RealtimeSession
 	// CloseSession closes the session in used with error code
 	CloseSession(code ErrorCode, err string)
 	// IsInRoom returns true when current user is in a room
@@ -49,31 +50,31 @@ type RTCtx interface {
 	// CurrentRoomID returns the current room id
 	CurrentRoomID() uint16
 	// Response responses packet back to the request source user
-	Response(out ...OutPacket) RTCtx
+	Response(out ...OutPacket) RealtimeCtx
 	// Send sends packet to specified user
-	Send(destSessionID uint16, out ...OutPacket) RTCtx
+	Send(destSessionID uint16, out ...OutPacket) RealtimeCtx
 	// BroadcastServer broadcasts packet to all online users
-	BroadcastServer(out ...OutPacket) RTCtx
+	BroadcastServer(out ...OutPacket) RealtimeCtx
 	// BroadcastApplication broadcasts packet to users in the same application
-	BroadcastApplication(out ...OutPacket) RTCtx
+	BroadcastApplication(out ...OutPacket) RealtimeCtx
 	// BroadcastRoom broadcasts packet to users in the same room
-	BroadcastRoom(out ...OutPacket) RTCtx
+	BroadcastRoom(out ...OutPacket) RealtimeCtx
 	// Authorization returns stored user authorization information
 	Authorization() interface{}
 	// SetAuthorization set and stores user authorization information
-	SetAuthorization(authorization interface{}) RTCtx
+	SetAuthorization(authorization interface{}) RealtimeCtx
 	// ValueTable returns user original parameters table
 	ValueTable() RTCtxValueTable
 	// HttpClient returns the default http client that used for server-server communication
 	HttpClient() *HttpClient
 	// Debug writes debug level log
-	Debug(format string, args ...interface{}) RTCtx
+	Debug(format string, args ...interface{}) RealtimeCtx
 	// Infof writes info level log
-	Infof(format string, args ...interface{}) RTCtx
+	Infof(format string, args ...interface{}) RealtimeCtx
 	// Warnf writes warn level log
-	Warnf(format string, args ...interface{}) RTCtx
+	Warnf(format string, args ...interface{}) RealtimeCtx
 	// Assert throws a fatal error if ok is not true
-	Assert(ok bool, format string, args ...interface{}) RTCtx
+	Assert(ok bool, format string, args ...interface{}) RealtimeCtx
 	// ErrorClientRequest responses client side error: bad request, unauthorized, forbidden etc.
 	ErrorClientRequest(errorCode uint16, format string, args ...interface{})
 	// ErrorServerInternal responses server side internal error
@@ -345,7 +346,7 @@ func (ctx *rtCtx) CloseSession(code ErrorCode, err string) {
 	}
 	ctx.server.session(ctx.sessionID).Close(code, err)
 }
-func (ctx *rtCtx) GetSession(sessionID uint16) RTSession {
+func (ctx *rtCtx) GetSession(sessionID uint16) RealtimeSession {
 	var ss = ctx.server.session(sessionID)
 	if ss == nil {
 		return nil
@@ -459,7 +460,7 @@ func (ctx *rtCtx) ReadString() string {
 func (ctx *rtCtx) InPayload() []byte {
 	return ctx.in.payload
 }
-func (ctx *rtCtx) Response(out ...OutPacket) RTCtx {
+func (ctx *rtCtx) Response(out ...OutPacket) RealtimeCtx {
 	if len(out) < 1 {
 		ctx.server.SendPacket(ctx.sessionID, ctx.out)
 	} else {
@@ -467,7 +468,7 @@ func (ctx *rtCtx) Response(out ...OutPacket) RTCtx {
 	}
 	return ctx
 }
-func (ctx *rtCtx) Send(sessionID uint16, out ...OutPacket) RTCtx {
+func (ctx *rtCtx) Send(sessionID uint16, out ...OutPacket) RealtimeCtx {
 	if len(out) < 1 {
 		ctx.server.SendPacket(sessionID, ctx.out)
 	} else {
@@ -475,7 +476,7 @@ func (ctx *rtCtx) Send(sessionID uint16, out ...OutPacket) RTCtx {
 	}
 	return ctx
 }
-func (ctx *rtCtx) BroadcastServer(out ...OutPacket) RTCtx {
+func (ctx *rtCtx) BroadcastServer(out ...OutPacket) RealtimeCtx {
 	if len(out) < 1 {
 		ctx.server.BroadcastPacketServer(ctx.out)
 	} else {
@@ -483,7 +484,7 @@ func (ctx *rtCtx) BroadcastServer(out ...OutPacket) RTCtx {
 	}
 	return ctx
 }
-func (ctx *rtCtx) BroadcastApplication(out ...OutPacket) RTCtx {
+func (ctx *rtCtx) BroadcastApplication(out ...OutPacket) RealtimeCtx {
 	var pkt OutPacket = ctx.out
 	if len(out) > 0 {
 		pkt = out[0]
@@ -494,7 +495,7 @@ func (ctx *rtCtx) BroadcastApplication(out ...OutPacket) RTCtx {
 	}
 	return ctx
 }
-func (ctx *rtCtx) BroadcastRoom(out ...OutPacket) RTCtx {
+func (ctx *rtCtx) BroadcastRoom(out ...OutPacket) RealtimeCtx {
 	var pkt OutPacket = ctx.out
 	if len(out) > 0 {
 		pkt = out[0]
@@ -571,7 +572,7 @@ func (ctx *rtCtx) Reset() OutPacket {
 func (ctx *rtCtx) Authorization() interface{} {
 	return ctx.authorization
 }
-func (ctx *rtCtx) SetAuthorization(authorization interface{}) RTCtx {
+func (ctx *rtCtx) SetAuthorization(authorization interface{}) RealtimeCtx {
 	ctx.authorization = authorization
 	return ctx
 }
@@ -606,19 +607,19 @@ func (ctx *rtCtx) MasterTable(tableName string, args ...string) MasterTable {
 		container: val,
 	}
 }
-func (ctx *rtCtx) Debug(format string, args ...interface{}) RTCtx {
+func (ctx *rtCtx) Debug(format string, args ...interface{}) RealtimeCtx {
 	ctx.server.debug(format, args...)
 	return ctx
 }
-func (ctx *rtCtx) Infof(format string, args ...interface{}) RTCtx {
+func (ctx *rtCtx) Infof(format string, args ...interface{}) RealtimeCtx {
 	ctx.logEntry.Infof(format, args...)
 	return ctx
 }
-func (ctx *rtCtx) Warnf(format string, args ...interface{}) RTCtx {
+func (ctx *rtCtx) Warnf(format string, args ...interface{}) RealtimeCtx {
 	ctx.logEntry.Warnf(format, args...)
 	return ctx
 }
-func (ctx *rtCtx) Assert(ok bool, format string, args ...interface{}) RTCtx {
+func (ctx *rtCtx) Assert(ok bool, format string, args ...interface{}) RealtimeCtx {
 	if ok {
 		return ctx
 	}
@@ -628,7 +629,7 @@ func (ctx *rtCtx) ErrorClientRequest(errorCode uint16, format string, args ...in
 	var str = fmt.Sprintf(format, args...)
 	ctx.logEntry.Info(str)
 	ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-	ctx.SetEventCode(RTEventCodeErrorClient)
+	ctx.SetEventCode(RealtimeEventCodeErrorClient)
 	ctx.WriteUint16(errorCode).WriteString(str)
 	ctx.Response()
 	ctx.Reset()
@@ -637,8 +638,8 @@ func (ctx *rtCtx) ErrorServerInternal(format string, args ...interface{}) {
 	var str = fmt.Sprintf(format, args...)
 	ctx.logEntry.Error(str)
 	ctx.SetHeader3(rtHeaderPV0, rtHeaderPDSC, rtHeaderCmdBuiltin)
-	ctx.SetEventCode(RTEventCodeErrorServer)
-	ctx.WriteUint16(RTErrorCodeInternal).WriteString(str)
+	ctx.SetEventCode(RealtimeEventCodeErrorServer)
+	ctx.WriteUint16(RealtimeErrorCodeInternal).WriteString(str)
 	ctx.Response()
 	ctx.Reset()
 }
@@ -859,8 +860,8 @@ func (o *rtPacket) Reset() OutPacket {
 	return o
 }
 
-// RTUserBase represents basic user authorization information
-type RTUserBase struct {
+// RealtimeUserBase represents basic user authorization information
+type RealtimeUserBase struct {
 	AppID        []byte
 	StringUserID string
 	UserID       []byte
@@ -869,7 +870,7 @@ type RTUserBase struct {
 	Token        []byte
 }
 
-func newRTUserBaseFromString(token string) (t *RTUserBase) {
+func newRTUserBaseFromString(token string) (t *RealtimeUserBase) {
 	var decodedToken, err = base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		return nil
@@ -878,7 +879,7 @@ func newRTUserBaseFromString(token string) (t *RTUserBase) {
 	if len(args) != 2 {
 		return nil
 	}
-	t = &RTUserBase{
+	t = &RealtimeUserBase{
 		StringUserID: string(args[0]),
 		UserID:       args[0],
 		rawToken:     args[1],
@@ -888,7 +889,7 @@ func newRTUserBaseFromString(token string) (t *RTUserBase) {
 	return t
 }
 
-func (t *RTUserBase) randomize() {
+func (t *RealtimeUserBase) randomize() {
 	t.rawToken = []byte(random.String(53, userIDCharset))
 	var token = append(t.UserID, byte('#'))
 	token = append(token, t.rawToken...)

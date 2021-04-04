@@ -5,21 +5,21 @@ import (
 )
 
 // realtime_aoi_map.go implements area of interest algorithm
-// NOT multi-goroutine safe, because of using single-loop model to
+// NOT multi-goroutine concurrency safe, because engine uses single-loop to
 // process the game requests sent from clients
 // when synchronize player location, ONLY broadcast location information
 // to other players that is nearby the moving player
 
-type rtAOIElem struct {
+type realtimeAOICell struct {
 	sessionID        uint16
 	userID           []byte
 	offsetX, offsetY float64
-	pred, next       *rtAOIElem
+	pred, next       *realtimeAOICell
 
 	aoiCell *rtAOICell
 }
 
-func (e *rtAOIElem) absolutePosition() (x float64, y float64) {
+func (e *realtimeAOICell) absolutePosition() (x float64, y float64) {
 	x = e.offsetX + float64(e.aoiCell.x)*e.aoiCell.aoiMap.cellSizeW
 	y = e.offsetY + float64(e.aoiCell.y)*e.aoiCell.aoiMap.cellSizeH
 	return
@@ -27,19 +27,19 @@ func (e *rtAOIElem) absolutePosition() (x float64, y float64) {
 
 type rtAOICell struct {
 	x, y uint16
-	list *rtAOIElem
+	list *realtimeAOICell
 
 	aoiMap *RTAreaOfInterestMap
 }
 
-// RTAreaOfInterestMap represents aoi map
+// RTAreaOfInterestMap represents area of insterest map data structure
 type RTAreaOfInterestMap struct {
 	mapID                uint16
 	cellMatrix           [][]*rtAOICell
 	cellNumW, cellNumH   uint16
 	cellSizeW, cellSizeH float64
 
-	mapBySessionID map[uint16]*rtAOIElem
+	mapBySessionID map[uint16]*realtimeAOICell
 
 	server         *hybsRealtimeServer
 	insertPacketFn func(sessionID uint16, userID []byte, x float64, y float64) (pkt OutPacket)
@@ -47,22 +47,27 @@ type RTAreaOfInterestMap struct {
 	movePacketFn   func(sessionID uint16, userID []byte, x float64, y float64, speed float64) (pkt OutPacket)
 }
 
-func (m *RTAreaOfInterestMap) SetInsertFn(
+// OnInsertUser sets the callback fn on user inserted into map
+func (m *RTAreaOfInterestMap) OnInsertUser(
 	fn func(sessionID uint16, userID []byte, x float64, y float64) (pkt OutPacket)) (ret *RTAreaOfInterestMap) {
 	m.insertPacketFn = fn
 	return m
 }
-func (m *RTAreaOfInterestMap) SetRemoveFn(fn func(sessionID uint16, userID []byte) (pkt OutPacket)) (ret *RTAreaOfInterestMap) {
+
+// OnRemoveUser sets the callback fn on user removed from map
+func (m *RTAreaOfInterestMap) OnRemoveUser(fn func(sessionID uint16, userID []byte) (pkt OutPacket)) (ret *RTAreaOfInterestMap) {
 	m.removePacketFn = fn
 	return m
 }
-func (m *RTAreaOfInterestMap) SetMoveFn(
+
+// OnMoveUser sets the callback fn on user moved on the map
+func (m *RTAreaOfInterestMap) OnMoveUser(
 	fn func(sessionID uint16, userID []byte, x float64, y float64, speed float64) (pkt OutPacket)) (ret *RTAreaOfInterestMap) {
 	m.movePacketFn = fn
 	return m
 }
 
-// NewRTAreaOfInterestMap creates and returns aoi map
+// NewRTAreaOfInterestMap creates and returns a new area of interest map
 func NewRTAreaOfInterestMap(
 	server *hybsRealtimeServer,
 	mapID uint16,
@@ -80,7 +85,7 @@ func NewRTAreaOfInterestMap(
 			pkt = server.outPacketPool.Get().(OutPacket)
 			defer server.outPacketPool.Put(pkt)
 			pkt.Reset()
-			pkt.SetEventCode(RTEventCodeUserEnteredAOIMap)
+			pkt.SetEventCode(RealtimeEventCodeUserEnteredAOIMap)
 			pkt.WriteUint16(newMap.mapID).WriteUint16(sessionID).WriteFloat64(x).WriteFloat64(y)
 			return pkt
 		},
@@ -88,7 +93,7 @@ func NewRTAreaOfInterestMap(
 			pkt = server.outPacketPool.Get().(OutPacket)
 			defer server.outPacketPool.Put(pkt)
 			pkt.Reset()
-			pkt.SetEventCode(RTEventCodeUserExitedAOIMap)
+			pkt.SetEventCode(RealtimeEventCodeUserExitedAOIMap)
 			pkt.WriteUint16(newMap.mapID).WriteUint16(sessionID)
 			return pkt
 		},
@@ -96,7 +101,7 @@ func NewRTAreaOfInterestMap(
 			pkt = server.outPacketPool.Get().(OutPacket)
 			defer server.outPacketPool.Put(pkt)
 			pkt.Reset()
-			pkt.SetEventCode(RTEventCodeUserMovedOnAOIMap)
+			pkt.SetEventCode(RealtimeEventCodeUserMovedOnAOIMap)
 			pkt.WriteUint16(newMap.mapID).WriteUint16(sessionID)
 			pkt.WriteFloat64(x).WriteFloat64(y).WriteFloat64(speed)
 			return pkt
@@ -155,13 +160,15 @@ func (m *RTAreaOfInterestMap) broadcastAdjacency(centralCell *rtAOICell, pkt Out
 	}
 	m.server.SendPacketMultiple(sendTarget, pkt)
 }
+
+// Insert inserts a user into area of interest map
 func (m *RTAreaOfInterestMap) Insert(sessionID uint16, userID []byte, x float64, y float64) {
 	var cellX, cellY = uint16(x / m.cellSizeW), uint16(y / m.cellSizeH)
 	if cellX >= m.cellNumW || cellY >= m.cellNumH {
 		return
 	}
 	var cell = m.cellMatrix[cellX][cellY]
-	var newElem = &rtAOIElem{
+	var newElem = &realtimeAOICell{
 		sessionID: sessionID,
 		userID:    userID,
 		offsetX:   math.Mod(x, m.cellSizeW),
@@ -183,6 +190,8 @@ func (m *RTAreaOfInterestMap) Insert(sessionID uint16, userID []byte, x float64,
 	// broadcast message
 	m.broadcastAdjacency(cell, m.insertPacketFn(sessionID, userID, x, y))
 }
+
+// Remove removes a user into area of interest map
 func (m *RTAreaOfInterestMap) Remove(sessionID uint16, userID []byte) {
 	var removingElem, ok = m.mapBySessionID[sessionID]
 	if !ok {
@@ -201,6 +210,8 @@ func (m *RTAreaOfInterestMap) Remove(sessionID uint16, userID []byte) {
 		removingElem.aoiCell.list = nil
 	}
 }
+
+// Move moves a user in the area of interest map
 func (m *RTAreaOfInterestMap) Move(sessionID uint16, userID []byte, posX float64, posY float64, speed float64) {
 	var movingElem, ok = m.mapBySessionID[sessionID]
 	if !ok {
