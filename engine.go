@@ -15,7 +15,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/jinzhu/configor"
 	"github.com/patrickmn/go-cache"
-	"github.com/xtaci/kcp-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"gorm.io/gorm"
@@ -582,17 +581,29 @@ func StartService(applicationUp func(engine Engine), applicationDown func(engine
 	// create and init realtime services
 	for _, realtimeConfig := range config.RealtimeServer {
 		var server = newRealtimeServer(engine, realtimeConfig)
-		var l, _ = kcp.Listen(realtimeConfig.Address)
-		server.setListener(&kcpListener{
-			Listener: l.(*kcp.Listener),
-			config:   server.realtimeConfig,
-		})
+		var l rtListenerInterface = nil
+		if strings.EqualFold(realtimeConfig.Protocol, "kcp") {
+			if l, err = getKcpListenerFn(&realtimeConfig); err != nil {
+				fmt.Printf("listen socket failed:%s\n", err)
+				return
+			}
+			server.setListener(l)
+		} else if strings.EqualFold(realtimeConfig.Protocol, "quic") {
+			if l, err = getQuicListenerFn(&realtimeConfig); err != nil {
+				fmt.Printf("listen socket failed:%s\n", err)
+				return
+			}
+			server.setListener(l)
+		} else {
+			fmt.Printf("unknown protocol name:%s\n", realtimeConfig.Protocol)
+			return
+		}
 		if err = server.loadControllerConfig(); err != nil {
 			fmt.Printf("load realtime service [%s] controllers failed:%s\n", realtimeConfig.ID, err)
 			return
 		}
 		if err = server.initHandlerMap(); err != nil {
-			fmt.Printf("init realtime handlers failed:%s", err)
+			fmt.Printf("init realtime handlers failed:%s\n", err)
 			return
 		}
 		server.sessionManager.init(server)

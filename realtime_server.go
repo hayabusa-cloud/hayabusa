@@ -28,6 +28,7 @@ type realtimeConfig struct {
 	ID                 string        `yaml:"id" required:"true"`
 	Network            string        `yaml:"network" default:"udp"`
 	Address            string        `yaml:"address" default:"localhost:8443"`
+	Protocol           string        `yaml:"protocol" defualt:"kcp"`
 	ByteOrder          string        `yaml:"byte_order" default:"big"`
 	CertFile           string        `yaml:"cert_file" default:"cert.pem"`
 	KeyFile            string        `yaml:"key_file" default:"key.pem"`
