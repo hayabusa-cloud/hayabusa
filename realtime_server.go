@@ -330,6 +330,8 @@ func (ss *rtSession) processAuthentication() {
 	ss.userBase.Token = receivedToken
 	// permission = None(authenticated, but no permission)
 	ss.userBase.Permission = RtAuthStatusNone
+	// in your own application, check user information by memory or db etc.
+	// if authorization passed, then give user permissions
 }
 func (ss *rtSession) processPayload() {
 	// context data table
