@@ -884,7 +884,7 @@ func (rs *hybsRealtimeServer) serveCtx(ctx *rtCtx) {
 		entry = entry.WithField("header", fmt.Sprintf("%x", ctx.in.header))
 		entry = entry.WithField("code", fmt.Sprintf("%x", ctx.in.code))
 		entry = entry.WithField("len", fmt.Sprintf("%x", ctx.in.length-rtPacketLenSize-rtPacketHeaderSize))
-		entry = entry.WithField("payload", fmt.Sprintf("%x", ctx.in.payload))
+		entry = entry.WithField("payload", fmt.Sprintf("%x", ctx.in.payload[:ctx.in.length]))
 		entry.Infof("serving packet")
 	}
 	rs.defaultModule <- ctx
