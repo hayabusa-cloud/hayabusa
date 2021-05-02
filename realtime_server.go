@@ -358,10 +358,11 @@ func (ss *rtSession) processPayload() {
 	logEntry = logEntry.WithField("code", fmt.Sprintf("%x", inPacket.code))
 	var newCtx = &rtCtx{
 		// core component
-		server:    ss.server,
-		sessionID: ss.id,
-		in:        inPacket,
-		out:       outPacket,
+		server:          ss.server,
+		sessionID:       ss.id,
+		addonPermission: RtAuthStatusNone,
+		in:              inPacket,
+		out:             outPacket,
 		// context
 		value:         ctxValue,
 		defaultRedis:  "",

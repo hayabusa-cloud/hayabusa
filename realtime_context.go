@@ -59,6 +59,10 @@ type RealtimeCtx interface {
 	BroadcastApplication(out ...OutPacket) RealtimeCtx
 	// BroadcastRoom broadcasts packet to users in the same room
 	BroadcastRoom(out ...OutPacket) RealtimeCtx
+	// Permission returns current permission level
+	Permission() uint8
+	// GivePermission gives permission to user for current request only
+	GivePermission(perm uint8)
 	// Authorization returns stored user authorization information
 	Authorization() interface{}
 	// SetAuthorization set and stores user authorization information
@@ -261,10 +265,11 @@ func (t *rtCtxValueTable) GetString(key int, def ...string) string {
 
 type rtCtx struct {
 	// core component
-	server    *hybsRealtimeServer
-	sessionID uint16
-	in        *rtPacket
-	out       *rtPacket
+	server          *hybsRealtimeServer
+	sessionID       uint16
+	addonPermission uint8
+	in              *rtPacket
+	out             *rtPacket
 	// context
 	value         *rtCtxValueTable
 	authorization interface{}
@@ -311,9 +316,17 @@ func (ctx *rtCtx) StringUserID() string {
 func (ctx *rtCtx) Permission() uint8 {
 	var ss = ctx.GetSession(ctx.sessionID)
 	if ss == nil {
-		return UserPermissionGuest
+		return ctx.addonPermission
+	}
+	if ctx.addonPermission > ss.(*rtSession).Permission() {
+		return ctx.addonPermission
 	}
 	return ss.(*rtSession).Permission()
+}
+func (ctx *rtCtx) GivePermission(perm uint8) {
+	if ctx.addonPermission < perm {
+		ctx.addonPermission = perm
+	}
 }
 func (ctx *rtCtx) Token() []byte {
 	var ss = ctx.GetSession(ctx.sessionID)

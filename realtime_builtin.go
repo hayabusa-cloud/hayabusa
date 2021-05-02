@@ -290,6 +290,19 @@ func rtBuiltinMiddlewareWithCtxValue(k int, v interface{}) RealtimeMiddleware {
 	}
 }
 
+func rtBuiltinMiddlewareRequirePermission(perm uint8) RealtimeMiddleware {
+	return func(h RealtimeHandler) RealtimeHandler {
+		return func(ctx RealtimeCtx) {
+			if ctx.(*rtCtx).Permission() < perm {
+				ctx.Warnf("short permission %d < %d", ctx.(*rtCtx).Permission(), perm)
+				return
+			}
+			ctx.Infof("with permission %d", ctx.(*rtCtx).Permission())
+			h(ctx)
+		}
+	}
+}
+
 func RunRealtimeHandler(ctx RealtimeCtx, builtinHandler string) {
 	var h, ok = rtBuiltinHandlerMap[builtinHandler]
 	if !ok {
